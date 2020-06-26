@@ -218,7 +218,6 @@ if __name__=="__main__":
         
     result.to_csv("./gridsearch/result.csv", index=False)
     
-    main()
     
     
     
