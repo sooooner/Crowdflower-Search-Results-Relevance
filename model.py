@@ -41,7 +41,7 @@ def kf_cv(X, Y, train_idx, dev_idx, param_grid):
                                                 '0','1','2','3','4','5','6','7','8','9'])
 
     stop_words = text.ENGLISH_STOP_WORDS.union(set(stopwords.words('english')))
-    tfv = text.TfidfVectorizer(min_df=3,  max_features=None, strip_accents='unicode', analyzer='word',\
+    tfv = text.TfidfVectorizer(min_df=param_grid['min_df'],  max_features=None, strip_accents='unicode', analyzer='word',\
                                token_pattern=r'\w{1,}', ngram_range=(1, 3), use_idf=True, smooth_idf=True, \
                                sublinear_tf=True, stop_words = stop_words).fit(train_query + train_title)
 
@@ -51,8 +51,9 @@ def kf_cv(X, Y, train_idx, dev_idx, param_grid):
     sim = similarlity_stack()
     svd = TruncatedSVD(n_components = param_grid['n_components'])
     scl = StandardScaler(with_mean=False)
-    smote = SMOTE(sampling_strategy='auto')
-    svm = SVC(C=param_grid['C'], gamma=param_grid['gamma'], probability=True)
+    smt = SMOTETomek(tomek=TomekLinks(sampling_strategy='majority'))
+    svm = SVC(C=param_grid['C'], gamma=param_grid['gamma'], class_weight=param_grid['class_weight'], \
+              kernel=param_grid['kernel'], probability=True)
 
     X_sim_train = sim.fit_transform(X_train, y)
     X_svd_train = svd.fit_transform(X_train)
@@ -64,7 +65,7 @@ def kf_cv(X, Y, train_idx, dev_idx, param_grid):
     X_stacked_dev = hstack([X_svd_dev, X_sim_dev])
     X_scaled_dev = scl.transform(X_stacked_dev)
 
-    X_samp, y_samp = smote.fit_sample(X_scaled_train, y)
+    X_samp, y_samp = smt.fit_sample(X_scaled_train, y)
 
     svm_result = svm.fit(X_samp, y_samp)
     svm_pred_dev = svm_result.predict(X_scaled_dev)
@@ -74,7 +75,7 @@ def kf_cv(X, Y, train_idx, dev_idx, param_grid):
 
 def gridsearchcv(X, Y, parmas):
     kf = StratifiedKFold(n_splits=5, shuffle=True)
-    parmas = parmas
+    parmas = list(product(*parmas))
     
     param_list = []
     cv_kappa_score_mean, cv_kappa_score_std = [], []
@@ -82,7 +83,10 @@ def gridsearchcv(X, Y, parmas):
     
     for param in parmas:
         start = time.time()
-        param_grid = {'n_components' : param[0], 'C' : param[1], 'gamma' : param[2]}
+        # n_components, C, gamma, class_weight, kernel, min_df
+        param_grid = {'n_components' : param[0], 'C' : param[1], \
+                      'gamma' : param[2], 'class_weight' : param[3], \
+                      'kernel' : param[4], 'min_df' : param[5]}
         cv_kappa_scores, cv_pr_auc_scores = [], []
         
         for train_idx, dev_idx in kf.split(X, Y):
@@ -210,13 +214,13 @@ if __name__=="__main__":
     test = pd.read_csv('./data/preprocessed_test.csv')
     idx = test.id.values.astype(int)
 
-    # n_components, C, gamma
-    parmas = [[230], [1000], ['auto']]
-    parmas = list(product(*parmas))
+    # n_components, C, gamma, class_weight, kernel, min_df
+    # parmas = [[230], [100, 1000], ['auto'], ['balanced', None], ['rbf', 'poly'], [3, 5, 7]]
+    parmas = [[230], [100], ['auto'], [None], ['rbf'], [5]]
 
     result = gridsearchcv(df_train, Y, parmas)
         
-    result.to_csv("./gridsearch/result.csv", index=False)
+    result.to_csv("./gridsearch/resultss.csv", index=False)
     
     
     
