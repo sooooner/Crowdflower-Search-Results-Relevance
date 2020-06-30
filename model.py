@@ -31,9 +31,6 @@ from utility.processing import processer
 from joblib import Parallel, delayed
 
 
-
-
-
 def main():
     train = pd.read_csv('./data/preprocessed_train.csv')
     test = pd.read_csv('./data/preprocessed_test.csv')
@@ -45,10 +42,6 @@ def main():
 
     test_query = list(test.apply(lambda x:'%s' % x['query_preprocessed'], axis=1))
     test_title = list(test.apply(lambda x:'%s' % x['product_title_preprocessed'], axis=1))
-
-
-    train_query = train_query[:slicer]
-    train_title = train_title[:slicer]
 
     stop_words = text.ENGLISH_STOP_WORDS.union(['http','www','img','border','color','style','padding','table','font', \
                                                 'thi','inch','ha','width','height','0','1','2','3','4','5','6','7','8','9'])
@@ -79,10 +72,7 @@ def main():
     svm__gamma = ['auto', 'scale']
     svm__kernel = ['rbf', 'poly']
     svm__class_weight = ['balanced', None]
-    svm__C = [1, 10, 100, 1000]
-
-    scoring = {'kappa': make_scorer(metric.quadratic_weighted_kappa, greater_is_better = True), \
-               'pr_auc': make_scorer(metric.pr_auc_score, greater_is_better = True, needs_proba=True, average='micro')}
+    svm__C = [10, 100, 1000]
                
     param_grid = {'FeatureUnion__svd__n_components' : svd__n_components,\
                   'sampling__sampling_strategy' : sampling__sampling_strategy,\
@@ -90,10 +80,12 @@ def main():
                   'svm__class_weight' : svm__class_weight,\
                   'svm__kernel' : svm__kernel,\
                   'svm__C': svm__C}
-               
 
+    scoring = {'kappa': make_scorer(metric.quadratic_weighted_kappa, greater_is_better = True), \
+               'pr_auc': make_scorer(metric.pr_auc_score, greater_is_better = True, needs_proba=True, average='micro')}
+               
     cv = StratifiedKFold(n_splits=5, shuffle=True)
-    model = GridSearchCV(estimator=clf, param_grid=param_grid, scoring=scoring, refit='pr_auc', verbose=10, n_jobs=-1, iid=True, cv=cv)
+    model = GridSearchCV(estimator=clf, param_grid=param_grid, scoring=scoring, refit='kappa', verbose=10, n_jobs=5, iid=True, cv=cv)
     model.fit(X_train, y)
 
     results = pd.DataFrame(model.cv_results_)
@@ -110,25 +102,16 @@ def main():
 
     best_model = model.best_estimator_
     best_model.fit(X_train, y)
-    dev_preds = best_model.predict(X_dev)
     model_preds = best_model.predict(X_test)
 
     sampled_svm_grid_submission = pd.DataFrame({"id": idx, "prediction": model_preds})
     if not os.path.exists("./submission"):
         os.makedirs("./submission")
     sampled_svm_grid_submission.to_csv("./submission/imbalance_svmsmote.csv", index=False)
-    
-    print(confusion_matrix(y_dev, dev_preds))
-    print(classification_report(y_dev, dev_preds))
-    plot_multiclass_roc_prc(best_model, X_dev, y_dev, save=True)
 
 
 
-def _fit(clf, X, Y, train_idx, dev_idx, param_grid, stop_words, i):
-    '''
-    return scaled data
-    '''
-    print('Fitting %d model'%i)
+def _fit_and_score(tfv, clf, smt, svm, X, Y, train_idx, dev_idx, i): 
     train, dev = X.iloc[train_idx], X.iloc[dev_idx]
     y, y_dev = Y.iloc[train_idx], Y.iloc[dev_idx]
     
@@ -138,43 +121,23 @@ def _fit(clf, X, Y, train_idx, dev_idx, param_grid, stop_words, i):
     dev_query = list(dev.apply(lambda x:'%s' % x['query_preprocessed'], axis=1))
     dev_title = list(dev.apply(lambda x:'%s' % x['product_title_preprocessed'], axis=1))
     
-    tfv = text.TfidfVectorizer(min_df=param_grid['min_df'],  max_features=None, strip_accents='unicode', analyzer='word',\
-                               token_pattern=r'\w{1,}', ngram_range=(1, 3), use_idf=True, smooth_idf=True, \
-                               sublinear_tf=True, stop_words = stop_words).fit(train_query + train_title)
-
+    tfv.fit(train_query + train_title)
     X_train = hstack([tfv.transform(train_query), tfv.transform(train_title)])
     X_dev = hstack([tfv.transform(dev_query), tfv.transform(dev_title)])
     
     X_scaled_train = clf.fit_transform(X_train)
     X_scaled_dev = clf.transform(X_dev)
     
-    return X_scaled_train, y, X_scaled_dev, y_dev
-
-
-def _sampling(smt, X, Y, i):
-    '''
-    return sampled data
-    '''
-    print('sampling %d model'%i)
-    X_samp, y_samp = smt.fit_sample(X, Y)
-    return X_samp, y_samp 
-
-
-def _fit_and_score(svm, sampled, scaled, i):
-    '''
-    return kappa, auc score
-    '''
-    print('Calculating score %d model'%i)
-    X_samp, y_samp  = sampled
-    X_scaled_dev, y_dev = scaled
+    X_samp, y_samp = smt.fit_sample(X_scaled_train, y)
     
     svm_result = svm.fit(X_samp, y_samp)
     svm_pred_dev = svm_result.predict(X_scaled_dev)
     svm_pred_proba_dev = svm_result.predict_proba(X_scaled_dev)
+
     return metric.quadratic_weighted_kappa(y_dev, svm_pred_dev), metric.pr_auc_score(y_dev, svm_pred_proba_dev)
 
 
-def parallel_k_fold(data, target, param, stop_words):
+def parallel_k_fold(data, target, param, stop_words, k, number_of_total_iter):
     '''
     return cv_kappa_scores, cv_pr_auc_scores, param_grid
     '''
@@ -184,48 +147,37 @@ def parallel_k_fold(data, target, param, stop_words):
                   'kernel' : param[4], 'min_df' : param[5]}
     
     n_splits = 5
-    n_jobs = 5
+    n_jobs = 3
     start = time.time()
     _k_fold = StratifiedKFold(n_splits=n_splits, shuffle=True)
     parallel = Parallel(n_jobs=n_jobs)
     print('Fitting %d models with'%n_splits, param_grid, 'params %d at a time ...'%n_jobs)
 
-    
+    tfv = text.TfidfVectorizer(min_df=param_grid['min_df'],  max_features=None, strip_accents='unicode', analyzer='word',\
+                               token_pattern=r'\w{1,}', ngram_range=(1, 3), use_idf=True, smooth_idf=True, \
+                               sublinear_tf=True, stop_words = stop_words)
     sim = similarlity_stack()
     svd = TruncatedSVD(n_components = param_grid['n_components'])
     clf = Pipeline([('FeatureUnion', FeatureUnion( [('svd', svd), ('sim', sim)] )),\
                     ('scl', scl)])
-    
-    scaled_data = parallel(
-        delayed(_fit)(clone(clf), data, target, train_index, test_index, param_grid, stop_words, i) 
-        for i, (train_index, test_index) in enumerate(_k_fold.split(data, target))
-    )
-    scaled_data = np.array(scaled_data)
-    dev = scaled_data[:, 2:]
-    scaled_data = scaled_data[:, :2]
-    
-    smt = SVMSMOTE(sampling_strategy='not majority', svm_estimator=SVC(C=param_grid['C'], gamma=param_grid['gamma']), n_jobs=-1)
-    sampled_data = parallel(
-        delayed(_sampling)(clone(smt), scaled_X, y, i) 
-        for i, (scaled_X, y) in enumerate(scaled_data)
-    )
-    
-    del scaled_data
+    smt = SVMSMOTE(sampling_strategy='not majority', k_neighbors=4, svm_estimator=SVC(C=param_grid['C'], gamma=param_grid['gamma']))
     svm = SVC(C=param_grid['C'], gamma=param_grid['gamma'], class_weight=param_grid['class_weight'], \
               kernel=param_grid['kernel'], probability=True)
+    
     score_list = parallel(
-        delayed(_fit_and_score)(clone(svm), sampled, scaled, i) 
-        for i, (sampled, scaled) in enumerate(zip(sampled_data, dev))
+        delayed(_fit_and_score)(clone(tfv), clone(clf), clone(smt), clone(svm), data, target, train_index, test_index, i) 
+        for i, (train_index, test_index) in enumerate(_k_fold.split(data, target))
     )
     
     cv_kappa_scores, cv_pr_auc_scores = [], []
-    del sampled_data, dev
     for kappas, aucs in score_list:
         cv_kappa_scores.append(kappas)
         cv_pr_auc_scores.append(aucs)
     
-    print('Finished', param_grid, "kappa_score : %.2f, pr_auc_scores : %.2f"% (np.mean(cv_kappa_scores), np.mean(cv_pr_auc_scores)), \
+    print('%d/%d Finished'%(k, number_of_total_iter), param_grid, \
+          "kappa_score : %.2f, pr_auc_scores : %.2f"% (np.mean(cv_kappa_scores), np.mean(cv_pr_auc_scores)), \
           'time : %s'%(str(datetime.timedelta(seconds=int(time.time() - start)))))
+    time.sleep(300)
     return np.mean(cv_kappa_scores), np.std(cv_kappa_scores), np.mean(cv_pr_auc_scores), np.std(cv_pr_auc_scores), param_grid
 
 
@@ -236,16 +188,13 @@ def gridsearchcv(data, target, parmas):
     cv_kappa_score_mean, cv_kappa_score_std = [], []
     cv_pr_auc_score_mean, cv_pr_auc_score_std = [], []
     
-    stop_words = text.ENGLISH_STOP_WORDS.union(['http','www','img','border','color','style','padding','table',\
-                                                'font', '', 'thi','inch','ha','width','height',\
-                                                '0','1','2','3','4','5','6','7','8','9'])
     stop_words = text.ENGLISH_STOP_WORDS.union(set(stopwords.words('english')))
     
-    n_jobs = 2
+    n_jobs = 3
     parallel = Parallel(n_jobs=n_jobs)
-    
+    number_of_total_iter = len(parmas)
     scores_statistic = parallel(
-        delayed(parallel_k_fold)(data, target, param, stop_words) 
+        delayed(parallel_k_fold)(data, target, param, stop_words, i, number_of_total_iter=number_of_total_iter) 
         for i, param in enumerate(parmas)
     )
 
@@ -267,26 +216,26 @@ def gridsearchcv(data, target, parmas):
 
 
 if __name__=="__main__":
-    # df_train = pd.read_csv('./data/preprocessed_train.csv')
-    # Y = df_train['median_relevance']
-    # df_train = df_train[['query_preprocessed', 'product_title_preprocessed']]
-    # test = pd.read_csv('./data/preprocessed_test.csv')
-    # idx = test.id.values.astype(int)
-    # test = test[['query_preprocessed', 'product_title_preprocessed']]
-    # 
-    # # n_components, C, gamma, class_weight, kernel, min_df
-    # parmas = [[230], [10, 100, 1000], ['auto'], ['balanced', None], ['rbf', 'poly'], [3]]
-    # # parmas = [[230], [100], ['auto'], [None], ['rbf'], [5]]
-    # 
-    # result = gridsearchcv(df_train, Y, parmas)
-    # 
-    # import os
-    # if not os.path.exists("./gridsearch"):
-    #     os.makedirs("./gridsearch")
-    # result.to_csv("./gridsearch/results.csv", index=False)
+    df_train = pd.read_csv('./data/preprocessed_train.csv')
+    test = pd.read_csv('./data/preprocessed_test.csv')
+    idx = test.id.values.astype(int)
     
-    main()
+    Y = df_train['median_relevance']
+    df_train = df_train[['query_preprocessed', 'product_title_preprocessed']]
+    test = test[['query_preprocessed', 'product_title_preprocessed']]
     
+    # n_components, C, gamma, class_weight, kernel, min_df
+    parmas = [[230], [10, 100], ['auto'], [None], ['rbf'], [3, 5, 7]]
+
+    result = gridsearchcv(df_train, Y, parmas)
+    
+    import os
+    if not os.path.exists("./gridsearch"):
+        os.makedirs("./gridsearch")
+    result.to_csv("./gridsearch/results.csv", index=False)
+    
+
+    # main()
     
     
     
