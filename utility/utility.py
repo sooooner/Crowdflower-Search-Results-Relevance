@@ -10,6 +10,7 @@ from imblearn.combine import *
 from imblearn.over_sampling import *
 from imblearn.under_sampling import * 
 from sklearn.preprocessing import label_binarize
+from sklearn.dummy import DummyClassifier
 from sklearn.metrics import precision_recall_curve, average_precision_score
 from utility.processing import processer
 
@@ -76,10 +77,10 @@ class metric():
         Y_bin = label_binarize(y, classes=[1, 2, 3, 4])
         average_precision = average_precision_score(Y_bin, y_score, average=average)
     #     # 특정 점수에 대한 rating을 목표로 할때
-    #     ap={}
-    #     for i in range(1, 5):
-    #         ap[i] = average_precision_score(Y_bin[:, i-1], y_score[:, i-1])
-        return average_precision    
+        ap={}
+        for i in range(1, 5):
+            ap['rating %d'%i] = average_precision_score(Y_bin[:, i-1], y_score[:, i-1])
+        return average_precision, ap    
     
     def Euclidean_distance(A, B):
         return np.linalg.norm(A-B)
@@ -144,7 +145,7 @@ def plot_multiclass_roc_prc(clf, X, y, save=False):
     try:
         y_score = clf.decision_function(X)
     except:
-        print('Apply fit to the clf before Before drawing the curve')
+        print('Apply fit to the clf before drawing the curve')
     
     fpr, tpr, roc_auc = {}, {}, {}
     y_dummies = pd.get_dummies(y, drop_first=False).values
