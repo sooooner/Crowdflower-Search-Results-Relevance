@@ -6,6 +6,7 @@ import pandas as pd
 import nltk
 import time
 import datetime
+
 # nltk.download('stopwords')
 from itertools import product
 from nltk.corpus import stopwords
@@ -17,7 +18,7 @@ from sklearn.metrics import classification_report, roc_curve, mean_squared_error
 from sklearn.pipeline import FeatureUnion
 from sklearn.decomposition import TruncatedSVD
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import GridSearchCV, cross_val_score, StratifiedKFold, KFold
+from sklearn.model_selection import GridSearchCV, cross_val_score, StratifiedKFold, KFold, StratifiedShuffleSplit
 from sklearn.feature_extraction import text
 
 from imblearn.combine import *
@@ -29,6 +30,8 @@ from utility.utility import *
 from utility.processing import processer
 
 from joblib import Parallel, delayed
+
+
 
 
 def main():
@@ -110,26 +113,25 @@ def main():
     sampled_svm_grid_submission.to_csv("./submission/imbalance_svmsmote.csv", index=False)
 
 
-
-def _fit_and_score(tfv, clf, smt, svm, X, Y, train_idx, dev_idx, i): 
+def _fit_and_score(tfv, clf, smt, svm, X, Y, train_idx, dev_idx): 
     train, dev = X.iloc[train_idx], X.iloc[dev_idx]
     y, y_dev = Y.iloc[train_idx], Y.iloc[dev_idx]
-    
+
     train_query = list(train.apply(lambda x:'%s' % x['query_preprocessed'], axis=1))
     train_title = list(train.apply(lambda x:'%s' % x['product_title_preprocessed'], axis=1))
 
     dev_query = list(dev.apply(lambda x:'%s' % x['query_preprocessed'], axis=1))
     dev_title = list(dev.apply(lambda x:'%s' % x['product_title_preprocessed'], axis=1))
-    
+
     tfv.fit(train_query + train_title)
     X_train = hstack([tfv.transform(train_query), tfv.transform(train_title)])
     X_dev = hstack([tfv.transform(dev_query), tfv.transform(dev_title)])
-    
+
     X_scaled_train = clf.fit_transform(X_train)
     X_scaled_dev = clf.transform(X_dev)
-    
+
     X_samp, y_samp = smt.fit_sample(X_scaled_train, y)
-    
+
     svm_result = svm.fit(X_samp, y_samp)
     svm_pred_dev = svm_result.predict(X_scaled_dev)
     svm_pred_proba_dev = svm_result.predict_proba(X_scaled_dev)
@@ -137,6 +139,8 @@ def _fit_and_score(tfv, clf, smt, svm, X, Y, train_idx, dev_idx, i):
     average_auc_score, auc_score_per_rating = metric.pr_auc_score(y_dev, svm_pred_proba_dev)
     return metric.quadratic_weighted_kappa(y_dev, svm_pred_dev), average_auc_score, auc_score_per_rating
 
+# def _fit_and_score(tfv, clf, smt, svm, X, Y, train_idx, dev_idx): 
+#     return 0.713, 0.2, {'rating 1' : .12, 'rating 2' : .32, 'rating 3' : .52, 'rating 4' : .76}
 
 def parallel_k_fold(data, target, param, stop_words, k, number_of_total_iter):
     '''
@@ -148,9 +152,10 @@ def parallel_k_fold(data, target, param, stop_words, k, number_of_total_iter):
                   'kernel' : param[4], 'min_df' : param[5]}
     
     n_splits = 4
-    n_jobs = 5
+    n_jobs = 2
     start = time.time()
-    _k_fold = StratifiedKFold(n_splits=n_splits, shuffle=True)
+    
+    _k_fold = StratifiedShuffleSplit( n_splits=n_splits, test_size=0.1, train_size=0.9)
     parallel = Parallel(n_jobs=n_jobs)
     now = time.localtime()
     print('Start fitting %d models at %02d:%02d:%02d with'%(n_splits, now.tm_hour, now.tm_min, now.tm_sec), param_grid, 'params %d at a time ...'%n_jobs)
@@ -168,8 +173,8 @@ def parallel_k_fold(data, target, param, stop_words, k, number_of_total_iter):
               kernel=param_grid['kernel'], probability=True)
     
     score_list = parallel(
-        delayed(_fit_and_score)(clone(tfv), clone(clf), clone(smt), clone(svm), data, target, train_index, test_index, i) 
-        for i, (train_index, test_index) in enumerate(_k_fold.split(data, target))
+        delayed(_fit_and_score)(clone(tfv), clone(clf), clone(smt), clone(svm), data, target, train_index, test_index) 
+        for train_index, test_index in _k_fold.split(data, target)
     )
     
     cv_kappa_scores, cv_pr_auc_scores, cv_auc_score_per_rating = [], [], []
@@ -185,14 +190,13 @@ def parallel_k_fold(data, target, param, stop_words, k, number_of_total_iter):
         r_3.append(auc_score_per_rating['rating 3'])
         r_4.append(auc_score_per_rating['rating 4'])
     
-    print('%d/%d Finished'%(k, number_of_total_iter), param_grid, \
-          'kappa_score : %.2f, pr_auc_scores : %.2f \n'% (np.mean(cv_kappa_scores), np.mean(cv_pr_auc_scores)), \
-          'rating 1 : %.2f, rating 2 : %.2f, rating 3 : %.2f, rating 4 : %.2f'%(np.mean(r_1), np.mean(r_2), np.mean(r_3), np.mean(r_4)) , \
-          'time : %s'%(str(datetime.timedelta(seconds=int(time.time() - start)))))
+    print('%d/%d'%(k+1, number_of_total_iter), param_grid, \
+          'kappa: %.2f, pr_auc: %.2f,'% (np.mean(cv_kappa_scores), np.mean(cv_pr_auc_scores)), \
+          'r1: %.2f, r2: %.2f, r3: %.2f, r4: %.2f'%(np.mean(r_1), np.mean(r_2), np.mean(r_3), np.mean(r_4)), \
+          'time: %s'%(str(datetime.timedelta(seconds=int(time.time() - start)))))
     time.sleep(120)
     return np.mean(cv_kappa_scores), np.std(cv_kappa_scores), np.mean(cv_pr_auc_scores), np.std(cv_pr_auc_scores), \
            (np.mean(r_1), np.std(r_1), np.mean(r_2), np.std(r_2), np.mean(r_3), np.std(r_3), np.mean(r_4), np.std(r_4)), param_grid
-
 
 def gridsearchcv(data, target, parmas):
     parmas = list(product(*parmas))
@@ -209,8 +213,7 @@ def gridsearchcv(data, target, parmas):
     param_list = []
     cv_kappa_score_mean, cv_kappa_score_std = [], []
     cv_pr_auc_score_mean, cv_pr_auc_score_std = [], []
-    cv_auc_score_per_rating = []
-    auc_rating_1_mean, auc_rating_2mean, auc_rating_3_mean, auc_rating_4_mean = [], [], [], [] 
+    auc_rating_1_mean, auc_rating_2_mean, auc_rating_3_mean, auc_rating_4_mean = [], [], [], [] 
     auc_rating_1_std, auc_rating_2_std, auc_rating_3_std, auc_rating_4_std = [], [], [], [] 
     for kappa_mean, kappa_std, auc_mean, auc_std, auc_score_per_ratings, param_grid in scores_statistic:
         param_list.append(param_grid)
@@ -218,15 +221,9 @@ def gridsearchcv(data, target, parmas):
         cv_kappa_score_std.append(kappa_std)
         cv_pr_auc_score_mean.append(auc_mean)
         cv_pr_auc_score_std.append(auc_std)
-        for auc_score_per_rating in auc_score_per_ratings:
-            auc_rating_1_mean.append(auc_score_per_rating[0])
-            auc_rating_1_std.append(auc_score_per_rating[1])
-            auc_rating_2_mean.append(auc_score_per_rating[2])
-            auc_rating_2_std.append(auc_score_per_rating[3])
-            auc_rating_3_mean.append(auc_score_per_rating[4])
-            auc_rating_3_std.append(auc_score_per_rating[5])
-            auc_rating_4_mean.append(auc_score_per_rating[6])
-            auc_rating_4_std.append(auc_score_per_rating[7])
+        for auc_list, statics in zip([auc_rating_1_mean, auc_rating_1_std, auc_rating_2_mean, auc_rating_2_std, \
+                                      auc_rating_3_mean, auc_rating_3_std, auc_rating_4_mean, auc_rating_4_std], auc_score_per_ratings):
+            auc_list.append(statics)
           
     param_n_components, param_C, param_gamma, param_class_weight, param_kernel, param_min_df = [], [], [], [], [], []
     for pram_dicts in param_list:
@@ -271,15 +268,14 @@ if __name__=="__main__":
     test = test[['query_preprocessed', 'product_title_preprocessed']]
     
     # n_components, C, gamma, class_weight, kernel, min_df
-    # parmas = [[230, 250], [1, 3, 5, 10], ['auto'], [None], ['rbf'], [3, 5, 7]]
-    parmas = [[230], [3], ['auto'], [None], ['rbf'], [7]]
+    parmas = [[230, 250], [1, 3, 5, 10], ['auto'], [None], ['rbf'], [3, 5, 7]]
+    # parmas = [[230], [5], ['auto'], [None], ['rbf'], [7]]
     result = gridsearchcv(df_train, Y, parmas)
     
     import os
     if not os.path.exists("./gridsearch"):
         os.makedirs("./gridsearch")
     result.to_csv("./gridsearch/results_detail.csv", index=False)
-    
 
     # main()
     
