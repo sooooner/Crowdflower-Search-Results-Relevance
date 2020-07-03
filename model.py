@@ -178,21 +178,24 @@ def parallel_k_fold(data, target, param, stop_words, k, number_of_total_iter):
         cv_pr_auc_scores.append(auc)
         cv_auc_score_per_rating.append(auc_dict)
     
+    r_1, r_2, r_3, r_4 = [], [], [], []
+    for auc_score_per_rating in cv_auc_score_per_rating:
+        r_1.append(auc_score_per_rating['rating 1'])
+        r_2.append(auc_score_per_rating['rating 2'])
+        r_3.append(auc_score_per_rating['rating 3'])
+        r_4.append(auc_score_per_rating['rating 4'])
+    
     print('%d/%d Finished'%(k, number_of_total_iter), param_grid, \
-          "kappa_score : %.2f, pr_auc_scores : %.2f"% (np.mean(cv_kappa_scores), np.mean(cv_pr_auc_scores)), \
+          'kappa_score : %.2f, pr_auc_scores : %.2f \n'% (np.mean(cv_kappa_scores), np.mean(cv_pr_auc_scores)), \
+          'rating 1 : %.2f, rating 2 : %.2f, rating 3 : %.2f, rating 4 : %.2f'%(np.mean(r_1), np.mean(r_2), np.mean(r_3), np.mean(r_4)) , \
           'time : %s'%(str(datetime.timedelta(seconds=int(time.time() - start)))))
     time.sleep(120)
-    return np.mean(cv_kappa_scores), np.std(cv_kappa_scores), np.mean(cv_pr_auc_scores), np.std(cv_pr_auc_scores), cv_auc_score_per_rating, param_grid
+    return np.mean(cv_kappa_scores), np.std(cv_kappa_scores), np.mean(cv_pr_auc_scores), np.std(cv_pr_auc_scores), \
+           (np.mean(r_1), np.std(r_1), np.mean(r_2), np.std(r_2), np.mean(r_3), np.std(r_3), np.mean(r_4), np.std(r_4)), param_grid
 
 
 def gridsearchcv(data, target, parmas):
     parmas = list(product(*parmas))
-    
-    param_list = []
-    cv_kappa_score_mean, cv_kappa_score_std = [], []
-    cv_pr_auc_score_mean, cv_pr_auc_score_std = [], []
-    cv_auc_score_per_rating_dict = [] 
-    
     stop_words = text.ENGLISH_STOP_WORDS.union(set(stopwords.words('english')))
     
     n_jobs = 2
@@ -202,32 +205,28 @@ def gridsearchcv(data, target, parmas):
         delayed(parallel_k_fold)(data, target, param, stop_words, i, number_of_total_iter) 
         for i, param in enumerate(parmas)
     )
-
-    for kappa_mean, kappa_std, auc_mean, auc_std, auc_score_per_rating_dict, param_grid in scores_statistic:
+    
+    param_list = []
+    cv_kappa_score_mean, cv_kappa_score_std = [], []
+    cv_pr_auc_score_mean, cv_pr_auc_score_std = [], []
+    cv_auc_score_per_rating = []
+    auc_rating_1_mean, auc_rating_2mean, auc_rating_3_mean, auc_rating_4_mean = [], [], [], [] 
+    auc_rating_1_std, auc_rating_2_std, auc_rating_3_std, auc_rating_4_std = [], [], [], [] 
+    for kappa_mean, kappa_std, auc_mean, auc_std, auc_score_per_ratings, param_grid in scores_statistic:
         param_list.append(param_grid)
         cv_kappa_score_mean.append(kappa_mean)
         cv_kappa_score_std.append(kappa_std)
         cv_pr_auc_score_mean.append(auc_mean)
         cv_pr_auc_score_std.append(auc_std)
-        cv_auc_score_per_rating_dict.append(auc_score_per_rating_dict)
-          
-    auc_rating_1_mean, auc_rating_1_mean, auc_rating_1_mean, auc_rating_1_mean = [], [], [], [] 
-    auc_rating_1_std, auc_rating_1_std, auc_rating_1_std, auc_rating_1_std = [], [], [], [] 
-    for auc_score_per_rating_dict in cv_auc_score_per_rating_dict:
-        r_1, r_2, r_3, r_4 = [], [], [], []
-        for auc_score_per_rating in auc_score_per_rating_dict:
-            r_1.append(auc_score_per_rating['rating 1'])
-            r_2.append(auc_score_per_rating['rating 2'])
-            r_3.append(auc_score_per_rating['rating 3'])
-            r_4.append(auc_score_per_rating['rating 4'])
-        auc_rating_1_mean = auc_rating_1_mean.append(r_1)
-        auc_rating_1_std = auc_rating_1_std.append(r_1)
-        auc_rating_2_mean = auc_rating_2_mean.append(r_2)
-        auc_rating_2_std = auc_rating_2_std.append(r_2)
-        auc_rating_3_mean = auc_rating_3_mean.append(r_3)
-        auc_rating_3_std = auc_rating_3_std.append(r_3)
-        auc_rating_4_mean = auc_rating_4_mean.append(r_4)
-        auc_rating_4_std = auc_rating_4_std.append(r_4)
+        for auc_score_per_rating in auc_score_per_ratings:
+            auc_rating_1_mean.append(auc_score_per_rating[0])
+            auc_rating_1_std.append(auc_score_per_rating[1])
+            auc_rating_2_mean.append(auc_score_per_rating[2])
+            auc_rating_2_std.append(auc_score_per_rating[3])
+            auc_rating_3_mean.append(auc_score_per_rating[4])
+            auc_rating_3_std.append(auc_score_per_rating[5])
+            auc_rating_4_mean.append(auc_score_per_rating[6])
+            auc_rating_4_std.append(auc_score_per_rating[7])
           
     param_n_components, param_C, param_gamma, param_class_weight, param_kernel, param_min_df = [], [], [], [], [], []
     for pram_dicts in param_list:
@@ -272,14 +271,14 @@ if __name__=="__main__":
     test = test[['query_preprocessed', 'product_title_preprocessed']]
     
     # n_components, C, gamma, class_weight, kernel, min_df
-    parmas = [[220, 230, 250], [1, 10, 100], ['auto'], [None], ['rbf'], [3, 5, 7]]
-
+    # parmas = [[230, 250], [1, 3, 5, 10], ['auto'], [None], ['rbf'], [3, 5, 7]]
+    parmas = [[230], [3], ['auto'], [None], ['rbf'], [7]]
     result = gridsearchcv(df_train, Y, parmas)
     
     import os
     if not os.path.exists("./gridsearch"):
         os.makedirs("./gridsearch")
-    result.to_csv("./gridsearch/results.csv", index=False)
+    result.to_csv("./gridsearch/results_detail.csv", index=False)
     
 
     # main()
