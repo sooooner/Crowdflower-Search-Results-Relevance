@@ -15,6 +15,8 @@ from nltk.tokenize import word_tokenize
 from sklearn.feature_extraction import text
 from sklearn.feature_extraction.text import CountVectorizer
 
+
+
 class processer:
     def __init__(self):
         pass
@@ -81,15 +83,15 @@ class processer:
         x = ' '.join(token_x)
         return x
     
-    def df_apply_func(df, func, output_name='_preprocessed', first_run=False):    
+    def df_apply_func(df, func, first_run=False):    
         if first_run:
             df['query_preprocessed'] = df.apply(lambda x: func(x['query']), axis=1)
             df['product_title_preprocessed'] = df.apply(lambda x: func(x['product_title']), axis=1)
-            df['product_description_preprocessed'] = df.apply(lambda x: func(x['product_description']), axis=1)
+            # df['product_description_preprocessed'] = df.apply(lambda x: func(x['product_description']), axis=1)
         else :
             df['query_preprocessed'] = df.apply(lambda x: func(x['query_preprocessed']), axis=1)
             df['product_title_preprocessed'] = df.apply(lambda x: func(x['product_title_preprocessed']), axis=1)
-            df['product_description_preprocessed'] = df.apply(lambda x: func(x['product_description_preprocessed']), axis=1)
+            # df['product_description_preprocessed'] = df.apply(lambda x: func(x['product_description_preprocessed']), axis=1)
         return df
         
     def words_freq_sort(df):
@@ -106,35 +108,67 @@ class processer:
         half_of_front = x[:half].reshape(-1)
         half_of_end = x[half:].reshape(-1)
         return half_of_front, half_of_end
-
-if __name__=="__main__":
-    # load data
-    train = pd.read_csv('./data/train.csv').fillna('')
-    test = pd.read_csv('./data/test.csv').fillna('')
+     
+def preprocessing(inputs, output):
+    if basename(inputs) == 'eda_train.csv':
+        df = pd.concat([pd.read_csv('./data/eda_train_1.csv').fillna(''), pd.read_csv('./data/eda_train_2.csv').fillna(''), \
+                        pd.read_csv('./data/eda_train_3.csv').fillna(''), pd.read_csv('./data/eda_train_4.csv').fillna('')])
+        df = df.sample(frac=1).reset_index(drop=True)
+    else:
+        df = pd.read_csv(inputs).fillna('')
+        
     process = processer()
     df_apply_func = processer.df_apply_func
-
-    train = df_apply_func(train, process.string_lower, first_run=True)
-    train = df_apply_func(train, process.remove_pattern)
-    train = df_apply_func(train, process.punct)
-    train = df_apply_func(train, process.tokenizer)
-    train = df_apply_func(train, process.remove_sw)
-    train = df_apply_func(train, process.P_stemmer)
-    train = df_apply_func(train, process.lemmatizer)
-    train = df_apply_func(train, process.remove_sw)
     
-    test = df_apply_func(test, process.string_lower, first_run=True)
-    test = df_apply_func(test, process.remove_pattern)
-    test = df_apply_func(test, process.punct)
-    test = df_apply_func(test, process.tokenizer)
-    test = df_apply_func(test, process.remove_sw)
-    test = df_apply_func(test, process.P_stemmer)
-    test = df_apply_func(test, process.lemmatizer)
-    test = df_apply_func(test, process.remove_sw)
-    
+    df = df_apply_func(df, process.string_lower, first_run=True)
+    df = df_apply_func(df, process.remove_pattern)
+    df = df_apply_func(df, process.punct)
+    df = df_apply_func(df, process.tokenizer)
+    df = df_apply_func(df, process.remove_sw)
+    df = df_apply_func(df, process.P_stemmer)
+    df = df_apply_func(df, process.lemmatizer)
+    df = df_apply_func(df, process.remove_sw)
+    print('finish processing for ' + inputs)
     #save
-    import os
-    if not os.path.exists("./data"):
-        os.makedirs("./data")
-    train.to_csv('./data/preprocessed_train.csv', index=False)
-    test.to_csv('./data/preprocessed_test.csv', index=False)
+    df.to_csv(output, index=False)
+
+    
+if __name__=="__main__":
+
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--input", required=True, type=str, help="input file of preprocessing data")
+    ap.add_argument("--output", required=False, type=str, help="output file of preprocessing data")
+    args = ap.parse_args()
+
+    output = None
+    if args.output:
+        output = args.output
+    else:
+        from os.path import dirname, basename, join
+        output = join(dirname(args.input), 'preprocessed_' + basename(args.input))
+        
+    # python utility/processing.py --input=./data/train.csv 
+    # python utility/processing.py --input=./data/test.csv 
+    # python utility/processing.py --input=./data/eda_train.csv 
+    preprocessing(args.input, output)
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
