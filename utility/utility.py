@@ -13,7 +13,8 @@ from sklearn.preprocessing import label_binarize
 from sklearn.dummy import DummyClassifier
 from sklearn.metrics import precision_recall_curve, average_precision_score
 from utility.processing import processer
-
+from os import makedirs
+from os.path import dirname, basename, join, exists
 
 class metric():
     # https://www.kaggle.com/triskelion/kappa-intuition
@@ -140,7 +141,7 @@ class similarlity_stack(BaseEstimator, TransformerMixin):
 #         return X
 
 
-def plot_multiclass_roc_prc(clf, X, y, save=False):
+def plot_multiclass_roc_prc(clf, X, y, file_name=None):
     Y_bin = label_binarize(y, classes=[1, 2, 3, 4])
     try:
         y_score = clf.decision_function(X)
@@ -184,11 +185,24 @@ def plot_multiclass_roc_prc(clf, X, y, save=False):
     axes[1].set_title('precision recall curve')
     axes[1].legend(loc="lower left")
     
-    if save:
-        import os
-        if not os.path.exists("./img"):
-            os.makedirs("./img")
-        plt.savefig('./img/curve.png')
+    if file_name!=None:
+        if not exists(join(dirname(file_name), 'img')):
+            makedirs(join(dirname(file_name), 'img'))
+        plt.savefig(join(dirname(file_name), 'img', basename(file_name)))
+    else:
+        plt.show()
         
-    plt.show()
+
+
+
+
+
+
+
+
+
+
+
+
+
 
