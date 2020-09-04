@@ -33,7 +33,7 @@ if args.alpha:
     alpha = args.alpha
 
 #generate more data with standard augmentation
-def gen_eda(train_orig, output_file, alpha, num_aug=9):
+def gen_eda(train_orig, output_file, alpha, num_aug=9, query_eda=False):
 
     writer = open(output_file, 'w', encoding='UTF8')
     lines = open(train_orig, 'r', encoding='UTF8').readlines()
@@ -41,11 +41,18 @@ def gen_eda(train_orig, output_file, alpha, num_aug=9):
     for i, line in enumerate(lines):
         parts = line[:-1].split('\t')
         label = parts[0]
-        sentence = parts[1]
-        id = parts[2]
-        aug_sentences = eda(sentence, alpha_sr=alpha, alpha_ri=alpha, alpha_rs=alpha, p_rd=alpha, num_aug=num_aug)
-        for aug_sentence in aug_sentences:
-            writer.write(label + "\t" + aug_sentence + "\t" + id + '\n')
+        id = parts[1]
+        query = parts[2]
+        title = parts[3]
+        description = parts[4]
+        if query_eda:
+            aug_querys = eda(query, alpha_sr=alpha, alpha_ri=alpha, alpha_rs=alpha, p_rd=alpha, num_aug=num_aug)
+        else :
+            aug_querys = [query] * (num_aug+1)
+        aug_titles = eda(title, alpha_sr=alpha, alpha_ri=alpha, alpha_rs=alpha, p_rd=alpha, num_aug=num_aug)
+        aug_descriptions = eda(description, alpha_sr=alpha, alpha_ri=alpha, alpha_rs=alpha, p_rd=alpha, num_aug=num_aug)
+        for aug_query, aug_title, aug_description in zip(aug_querys, aug_titles, aug_descriptions):
+            writer.write(label + "\t" + id + "\t" + aug_query + "\t" + aug_title + "\t" + aug_description + '\n')
 
     writer.close()
     print("generated augmented sentences with eda for " + train_orig + " to " + output_file + " with num_aug=" + str(num_aug))
@@ -53,53 +60,30 @@ def gen_eda(train_orig, output_file, alpha, num_aug=9):
 
 if __name__ == "__main__":
     
-    import os
+    import os    
     if not os.path.exists(args.input):
-        os.makedirs(dirname(args.input))
-        train = pd.read_csv('./data/train.csv')
+        if not os.path.exists(os.path.dirname(args.input)):
+            print('makedirs %s'%os.path.dirname(args.input))
+            os.makedirs(os.path.dirname(args.input))
+        train = pd.read_csv('./data/for_eda_train.csv')
         train.drop(5886, axis=0, inplace=True)
         for i in range(1, 5):
-            title_df = train.groupby('median_relevance').get_group(i)[['product_title', 'id']]
-            with open(join(dirname(args.input), "train_%d.txt"%i), 'w', encoding="utf-8") as f:
+            title_df = train.groupby('median_relevance').get_group(i)[['id', 'query_preprocessed', 'product_title_preprocessed', 'product_description_preprocessed']]
+            with open(os.path.join(os.path.dirname(args.input), "train_%d.txt"%i), 'w', encoding="utf-8") as f:
                 for j in range(len(title_df)):
-                    f.write("%d\t%s\t%d\n"%(i, title_df.iloc[j][0], title_df.iloc[j][1]))
+                    f.write("%d\t%d\t%s\t%s\t%s\n"%(i, title_df.iloc[j][0], title_df.iloc[j][1], title_df.iloc[j][2], title_df.iloc[j][3]))
 
     # generate augmented sentences and output into a new file
-    # python utility/augment.py --input=./data/eda/train_1.txt --num_aug=16 --alpha=0.05
-    # python utility/augment.py --input=./data/eda/train_2.txt --num_aug=8 --alpha=0.05
-    # python utility/augment.py --input=./data/eda/train_3.txt --num_aug=8 --alpha=0.05
-    # python utility/augment.py --input=./data/eda/train_4.txt --num_aug=2 --alpha=0.01
-    gen_eda(args.input, output, alpha=alpha, num_aug=num_aug)
-
-    train = pd.read_csv('./data/train.csv')
-    df = pd.DataFrame(columns=['id', 'product_title', 'median_relevance'])
+    gen_eda(args.input, output, alpha=alpha, num_aug=num_aug, query_eda=False)
+    
+    df = pd.DataFrame(columns=['median_relevance', 'id', 'query_preprocessed', 'product_title_preprocessed', 'product_description_preprocessed'])
     with open(output, 'r', encoding="utf-8") as f:
         lines = f.readlines()
         for i, line in enumerate(lines):
             parts = line[:-1].split('\t')
-            df.loc[i] = [parts[2], parts[1], parts[0]]
-    
-    train_i = train.groupby('median_relevance').get_group(int(args.input[-5]))
-    df['query'] = train_i.loc[train_i.index.repeat(num_aug+1)].reset_index(drop=True)['query']
-    df.to_csv('./data/eda_train_%d.csv'%int(args.input[-5]), index=False)
-
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+            df.loc[i] = [parts[0], parts[1], parts[2], parts[3],  parts[4]]
+            
+    # train = pd.read_csv('./data/train.csv')
+    # train_i = train.groupby('median_relevance').get_group(int(args.input[-5]))
+    # df['query'] = train_i.loc[train_i.index.repeat(num_aug+1)].reset_index(drop=True)['query']
+    df.to_csv(os.path.join(os.path.dirname(output), 'eda_train_%d.csv'%int(args.input[-5])), index=False)

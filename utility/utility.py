@@ -17,7 +17,11 @@ from os import makedirs
 from os.path import dirname, basename, join, exists
 
 class metric():
+    def __init__(self):
+        pass
+        
     # https://www.kaggle.com/triskelion/kappa-intuition
+    @staticmethod
     def confusion_matrix(rater_a, rater_b, min_rating=None, max_rating=None):
         assert(len(rater_a) == len(rater_b))
         if min_rating is None:
@@ -31,6 +35,7 @@ class metric():
             conf_mat[a - min_rating][b - min_rating] += 1
         return conf_mat
 
+    @staticmethod
     def histogram(ratings, min_rating=None, max_rating=None):
         if min_rating is None:
             min_rating = min(ratings)
@@ -42,6 +47,7 @@ class metric():
             hist_ratings[r - min_rating] += 1
         return hist_ratings
 
+    @staticmethod
     def quadratic_weighted_kappa(y, y_pred):
         rater_a = y
         rater_b = y_pred
@@ -74,6 +80,7 @@ class metric():
 
         return (1.0 - numerator / denominator)        
         
+    @staticmethod
     def pr_auc_score(y, y_score, average='micro'):
         Y_bin = label_binarize(y, classes=[1, 2, 3, 4])
         average_precision = average_precision_score(Y_bin, y_score, average=average)
@@ -83,9 +90,11 @@ class metric():
             ap['rating %d'%i] = average_precision_score(Y_bin[:, i-1], y_score[:, i-1])
         return average_precision, ap    
     
+    @staticmethod
     def Euclidean_distance(A, B):
         return np.linalg.norm(A-B)
         
+    @staticmethod
     def cos_sim(A, B):
         numerator = np.dot(A, B)
         denominator = np.linalg.norm(A)*np.linalg.norm(B)
@@ -93,9 +102,21 @@ class metric():
             return 0.0
         return numerator/denominator
     
+    @staticmethod
     def cos_distance(A, B):
         return 1 - metric.cos_sim(A, B)
-
+        
+    @staticmethod
+    def text_sim(A, B):
+        A_idx = np.where(A>0)[0]
+        B_idx = np.where(B>0)[0]
+        numerator = len(np.intersect1d(A_idx, B_idx))
+        denominator = np.log(len(A_idx)) + np.log(len(B_idx))
+        if denominator == 0:
+            return 0.0
+        return numerator/denominator
+        
+    @staticmethod
     def jaccard_sim(A, B):
         A_idx = np.where(A>0)[0]
         B_idx = np.where(B>0)[0]
@@ -104,27 +125,77 @@ class metric():
         if denominator == 0:
             return 0.0
         return numerator/denominator
-
+        
+    @staticmethod
     def jaccard_distance(A, B):
         return 1 - metric.jaccard_sim(A, B)
 
 # https://cloud.google.com/ai-platform/prediction/docs/custom-pipeline?hl=ko
-class similarlity_stack(BaseEstimator, TransformerMixin):            
+class similarlity_stack(BaseEstimator, TransformerMixin):
+    
+    def __init__(self):
+        self.average = None
+        self.boundary = None
+
     def fit(self, X ,y):
         return self
         
     def fit_transform(self, X, y):
-        self.fit(X,y)
-        return self.transform(X)
+        self.fit(X, y)
+        sim_matrix = self.transform(X)
+        self.average = np.zeros((len(y.unique()), 2))
+        self.boundary = np.zeros((len(y.unique())-1, 2))
+        for i, targe in enumerate(np.sort(y.unique())):
+            self.average[i] = sim_matrix.toarray()[np.where(y == targe)].sum(axis=0)/len(np.where(y == targe)[0])
+            # self.average[i] = sim_matrix[np.where(y == targe)].sum(axis=0)/len(np.where(y == targe)[0])
+        for i in range(len(y.unique()))[:-1]:
+            self.boundary[i] = (self.average[i] + self.average[i+1])/2
+        return sim_matrix
         
     def transform(self, X, y=None):
         cos_sims = []
         jaccard_sims = []
+        text_sims = []
         for row in X.tocsr():
             front, end = processer.split_array(row)
             cos_sims.append(metric.cos_sim(front, end))
-            jaccard_sims.append(metric.jaccard_sim(front, end))
-        return sparse.csr_matrix(np.matrix([x for x in zip(cos_sims, jaccard_sims)]))
+            # jaccard_sims.append(metric.jaccard_sim(front, end))
+        # return sparse.csr_matrix(np.matrix([x for x in zip(cos_sims, jaccard_sims)]))
+        return sparse.csr_matrix(np.matrix([x for x in cos_sims])).reshape(-1, 1)
+        
+    def predict(self, X):
+        if type(self.average) == type(None):
+            raise ValueError('Fitting X before predict y')
+
+        if X.shape[1] != 2:
+            X = self.transform(X)
+            
+        X = X[:, 0]
+        self.average = self.average[:, 0]
+        self.boundary = self.boundary[:, 0]
+            
+        y = np.ones(X.shape[0])
+        for i in range(3):
+            y[(X > self.boundary[i]).toarray().reshape(-1)] = i+2
+        return y
+        
+        
+class tf_weight_stack(BaseEstimator, TransformerMixin):
+    def __init__(self, tfv):
+        self.tfv = tfv
+    
+    def fit(self, query, title):
+        return self
+        
+    def fit_transform(self, query, title):
+        self.fit(query, title)
+        return self.transform(query, title)
+        
+    def transform(self, query, title):
+        title_tfv = self.tfv.transform(title)
+        tf_weight = [np.sum([title_tfv[row, self.tfv.vocabulary_[w]] for w in query[row].split(' ')]) for row in range(len(title))]
+        return sparse.csr_matrix(tf_weight).reshape(-1, 1)
+        
         
 # class sampling_for_piepline(BaseEstimator, TransformerMixin):     
 #     def fit(self, X, y):
@@ -186,8 +257,6 @@ def plot_multiclass_roc_prc(clf, X, y, file_name=None):
     axes[1].legend(loc="lower left")
     
     if file_name!=None:
-        if not exists(join(dirname(file_name), 'img')):
-            makedirs(join(dirname(file_name), 'img'))
         plt.savefig(join(dirname(file_name), 'img', basename(file_name)))
     else:
         plt.show()

@@ -4,7 +4,9 @@
 # https://github.com/jasonwei20/eda_nlp
 
 import random
+import numpy as np
 from random import shuffle
+from collections import OrderedDict
 
 random.seed(1)
 
@@ -68,20 +70,36 @@ from nltk.corpus import wordnet
 # 동의어 replace
 def synonym_replacement(words, n):
 	new_words = words.copy()
-	random_word_list = list(set([word for word in words if word not in stop_words]))
-	random.shuffle(random_word_list)
+	
+	# random_word_list = list(set([word for word in words if word not in stop_words]))
+	# random.shuffle(random_word_list)
+	random_word_list = list(OrderedDict((element, None) for element in [word for word in words if word not in stop_words]))
+	words_idx = np.arange(len(random_word_list))
+	random.shuffle(words_idx)
+	
 	num_replaced = 0
-	for random_word in random_word_list:
-		synonyms = get_synonyms(random_word)
+	for idx in words_idx:
+		synonyms = get_synonyms(random_word_list[idx])
 		if len(synonyms) >= 1:
 			synonym = random.choice(list(synonyms))
-			new_words = [synonym if word == random_word else word for word in new_words]
+			new_words = [synonym if word == random_word_list[idx] else word for word in new_words]
 			#print("replaced", random_word, "with", synonym)
 			num_replaced += 1
 		if num_replaced >= n: #only replace up to n words
 			break
 
-	#this is stupid but we need it, trust me
+	# num_replaced = 0
+	# for random_word in random_word_list:
+	# 	synonyms = get_synonyms(random_word)
+	# 	if len(synonyms) >= 1:
+	# 		synonym = random.choice(list(synonyms))
+	# 		new_words = [synonym if word == random_word else word for word in new_words]
+	# 		#print("replaced", random_word, "with", synonym)
+	# 		num_replaced += 1
+	# 	if num_replaced >= n: #only replace up to n words
+	# 		break
+
+	# this is stupid but we need it, trust me
 	sentence = ' '.join(new_words)
 	new_words = sentence.split(' ')
 
@@ -128,23 +146,23 @@ def random_deletion(words, p):
 # Randomly swap two words in the sentence n times
 ########################################################################
 
-def random_swap(words, n):
-	new_words = words.copy()
-	for _ in range(n):
-		new_words = swap_word(new_words)
-	return new_words
-
-def swap_word(new_words):
-	random_idx_1 = random.randint(0, len(new_words)-1)
-	random_idx_2 = random_idx_1
-	counter = 0
-	while random_idx_2 == random_idx_1:
-		random_idx_2 = random.randint(0, len(new_words)-1)
-		counter += 1
-		if counter > 3:
-			return new_words
-	new_words[random_idx_1], new_words[random_idx_2] = new_words[random_idx_2], new_words[random_idx_1] 
-	return new_words
+# def random_swap(words, n):
+# 	new_words = words.copy()
+# 	for _ in range(n):
+# 		new_words = swap_word(new_words)
+# 	return new_words
+# 
+# def swap_word(new_words):
+# 	random_idx_1 = random.randint(0, len(new_words)-1)
+# 	random_idx_2 = random_idx_1
+# 	counter = 0
+# 	while random_idx_2 == random_idx_1:
+# 		random_idx_2 = random.randint(0, len(new_words)-1)
+# 		counter += 1
+# 		if counter > 3:
+# 			return new_words
+# 	new_words[random_idx_1], new_words[random_idx_2] = new_words[random_idx_2], new_words[random_idx_1] 
+# 	return new_words
 
 ########################################################################
 # Random insertion
