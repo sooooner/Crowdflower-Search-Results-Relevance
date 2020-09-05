@@ -143,12 +143,13 @@ class similarlity_stack(BaseEstimator, TransformerMixin):
     def fit_transform(self, X, y):
         self.fit(X, y)
         sim_matrix = self.transform(X)
-        self.average = np.zeros((len(y.unique()), 2))
-        self.boundary = np.zeros((len(y.unique())-1, 2))
-        for i, targe in enumerate(np.sort(y.unique())):
+
+        self.average = np.zeros((len(np.unique(y)), 2))
+        self.boundary = np.zeros((len(np.unique(y))-1, 2))
+        for i, targe in enumerate(np.sort(np.unique(y))):
             self.average[i] = sim_matrix.toarray()[np.where(y == targe)].sum(axis=0)/len(np.where(y == targe)[0])
             # self.average[i] = sim_matrix[np.where(y == targe)].sum(axis=0)/len(np.where(y == targe)[0])
-        for i in range(len(y.unique()))[:-1]:
+        for i in range(len(np.unique(y)))[:-1]:
             self.boundary[i] = (self.average[i] + self.average[i+1])/2
         return sim_matrix
         

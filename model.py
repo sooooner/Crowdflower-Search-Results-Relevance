@@ -26,23 +26,20 @@ from imblearn.over_sampling import SVMSMOTE
 from utility.utility import metric, similarlity_stack, plot_multiclass_roc_prc
 from utility.processing import processer
 
-from os.path import dirname, basename, join
 
 
 class gridsearchCV(object):
-    def __init__(self, data, target, params, n_jobs, n_splits, filename, sample=False):
+    def __init__(self, data, target, params, filename, sample=False):
         self.data = data
         self.target = target
         self.params = list(product(*params))
-        self.sample = sample
-        self.n_jobs = n_jobs
-        self.n_splits = n_splits
         self.filename = filename
+        self.sample = sample
         self.output_filename = join(dirname(self.filename), 'sample_%s_'%str(self.sample) + basename(self.filename))
         self.number_of_total_iter = len(self.params)
         self.stop_words = text.ENGLISH_STOP_WORDS.union(set(stopwords.words('english')))
 
-    def _fit_and_score(self, tfv, clf, smt, svm, train_idx, dev_idx, t): 
+    def _fit_and_score(self, tfv, clf, smt, svm, train_idx, dev_idx): 
         '''
         fitting data to pipeline and scoring
         return : tuple, 
@@ -70,7 +67,8 @@ class gridsearchCV(object):
         tfv.fit(train_query + train_title)
         X_train = hstack([tfv.transform(train_query), tfv.transform(train_title)])
         X_dev = hstack([tfv.transform(dev_query), tfv.transform(dev_title)])
-    
+        del train_query, train_title, dev_query, dev_title
+        
         X_scaled_train = clf.fit_transform(X_train)
         X_scaled_dev = clf.transform(X_dev)
     
@@ -83,16 +81,13 @@ class gridsearchCV(object):
         svm_pred_dev = svm_result.predict(X_scaled_dev)
         svm_pred_proba_dev = svm_result.predict_proba(X_scaled_dev)
         
-        file_name = join(dirname(self.filename), 'result_%d_%s_temp.png'%(t+1, str(self.sample)))
-        plot_multiclass_roc_prc(svm, X_scaled_dev, y_dev, file_name=file_name)
-        
         average_auc_score, auc_score_per_rating = metric.pr_auc_score(y_dev, svm_pred_proba_dev)
         return metric.quadratic_weighted_kappa(y_dev, svm_pred_dev), average_auc_score, auc_score_per_rating
     
     # def _fit_and_score(self, tfv, clf, smt, svm, train_idx, dev_idx): 
     #     return 0.713, 0.2, {'rating 1' : .12, 'rating 2' : .32, 'rating 3' : .52, 'rating 4' : .76}        
         
-    def parallel_k_fold(self, param, k=0):
+    def parallel_k_fold(self, n_jobs, n_splits, param, k=0):
         '''
         write cv_kappa_scores, cv_pr_auc_scores, param_grid
         '''
@@ -101,13 +96,12 @@ class gridsearchCV(object):
                       'gamma' : param[2], 'class_weight' : param[3], \
                       'kernel' : param[4], 'min_df' : param[5]}
         
-        n_jobs = -1
-        _k_fold = StratifiedShuffleSplit(n_splits=self.n_splits, test_size=0.1, train_size=0.9)
+        _k_fold = StratifiedShuffleSplit(n_splits=n_splits, test_size=0.1, train_size=0.9)
         parallel = Parallel(n_jobs=n_jobs)
         
         start = time.time()
         now = time.localtime()
-        print('Start fitting %d sampling %s models at %02d:%02d:%02d with'%(self.n_splits, str(self.sample), now.tm_hour, now.tm_min, now.tm_sec), param_grid, 'params %d at a time ...'%n_jobs)
+        print('Start fitting %d sampling %s models at %02d:%02d:%02d with'%(n_splits, str(self.sample), now.tm_hour, now.tm_min, now.tm_sec), param_grid, 'params %d at a time ...'%n_jobs)
     
         tfv = text.TfidfVectorizer(min_df=param_grid['min_df'],  max_features=None, strip_accents='unicode', analyzer='word',\
                                    token_pattern=r'\w{1,}', ngram_range=(1, 3), use_idf=True, smooth_idf=True, \
@@ -117,13 +111,13 @@ class gridsearchCV(object):
         scl = StandardScaler(with_mean=False)
         clf = Pipeline([('FeatureUnion', FeatureUnion( [('svd', svd), ('sim', sim)] )),\
                         ('scl', scl)])
-        smt = SVMSMOTE(sampling_strategy='not majority', k_neighbors=4, svm_estimator=SVC(C=param_grid['C'], gamma=param_grid['gamma']))
         svm = SVC(C=param_grid['C'], gamma=param_grid['gamma'], class_weight=param_grid['class_weight'], \
                   kernel=param_grid['kernel'], probability=True)
-        
+        smt = SVMSMOTE(sampling_strategy='not majority', k_neighbors=4, svm_estimator=svm)
+
         score_list = parallel(
-            delayed(self._fit_and_score)(clone(tfv), clone(clf), clone(smt), clone(svm), train_index, test_index, t) 
-            for t, (train_index, test_index) in enumerate(_k_fold.split(self.data.index.unique(), self.target.loc[~self.target.index.duplicated(keep='first')]))
+            delayed(self._fit_and_score)(clone(tfv), clone(clf), clone(smt), clone(svm), train_index, test_index) 
+            for train_index, test_index in _k_fold.split(self.data.index.unique(), self.target.loc[~self.target.index.duplicated(keep='first')])
         )
     
         cv_kappa_scores, cv_pr_auc_scores, cv_auc_score_per_rating = [], [], []
@@ -149,11 +143,10 @@ class gridsearchCV(object):
               
         # time.sleep(120)
     
-    def gridsearchcv_writer(self):
-        parallel = Parallel(n_jobs=self.n_jobs)
-        
+    def gridsearchcv_writer(self, n_jobs):
+        parallel = Parallel(n_jobs=n_jobs)
         parallel(
-            delayed(self.parallel_k_fold)(param, i) 
+            delayed(self.parallel_k_fold)(n_jobs=-1, n_splits=2, param=param, k=i) 
             for i, param in enumerate(self.params)
         )
             
@@ -174,15 +167,16 @@ if __name__=="__main__":
     
     target = train['median_relevance']
     train = train[['query_preprocessed', 'product_title_preprocessed']]
-
+    
     # n_components, C, gamma, class_weight, kernel, min_df
-    params = [[200, 300], [10, 100], ['auto'], [None], ['rbf'], [10, 15]]
-    n_jobs = 2
-    n_splits = 4
+    params = [[100, 200, 300], [1, 10], ['auto'], [None], ['rbf'], [3, 7]]
+    # params = [[230], [10], ['auto'], [None], ['rbf'], [3, 7]]
+    
+    n_jobs = 6
     filename = './gridsearch/result.txt'
-    for sample in [False]:
-        gridsearchcv = gridsearchCV(train, target, params, n_jobs, n_splits, filename, sample)
-        gridsearchcv.gridsearchcv_writer()
+    for sample in [False, True]:
+        gridsearchcv = gridsearchCV(train, target, params, filename, sample)
+        gridsearchcv.gridsearchcv_writer(n_jobs)
     
     
 
