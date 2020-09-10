@@ -170,7 +170,6 @@ class gridsearchCV(object):
 if __name__=="__main__":
     train = pd.read_csv('./data/preprocessed_eda_train.csv')
     train.set_index('id', inplace=True)
-    train = train.head(500)
     
     target = train['median_relevance']
     train = train[['query_preprocessed', 'product_title_preprocessed']]
