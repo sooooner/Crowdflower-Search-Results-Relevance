@@ -7,22 +7,32 @@ from nltk.corpus import stopwords
 from scipy.sparse import hstack
 
 from sklearn.svm import SVC
-from sklearn.metrics import classification_report, roc_curve, mean_squared_error, auc, confusion_matrix, make_scorer
 from sklearn.pipeline import FeatureUnion
 from sklearn.decomposition import TruncatedSVD
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import GridSearchCV, StratifiedKFold
 from sklearn.feature_extraction import text
 
 from imblearn.over_sampling import SVMSMOTE
 from imblearn.pipeline import Pipeline
 
-from utility.utility import metric, similarlity_stack, plot_multiclass_roc_prc
-from utility.processing import processer
+from utility.utility import  similarlity_stack
 
-def main():
-    # train = pd.read_csv('./data/preprocessed_train.csv')
-    train = pd.read_csv('./data/preprocessed_eda_train.csv')
+import argparse
+ap = argparse.ArgumentParser()
+ap.add_argument("--mode", required=True, type=str, help="mode select:'eda' or 'sampling'")
+ap.add_argument("--ensemble", required=False, type=bool, help="Whether to ensemble or not")
+args = ap.parse_args()
+
+def Predict(mode='eda'):
+    '''
+    mode : string, 'eda' or 'sampling'
+    '''
+    if mode=='eda':
+        train = pd.read_csv('./data/preprocessed_eda_train.csv')
+    elif mode=='sampling':
+        train = pd.read_csv('./data/preprocessed_train.csv')
+    else:
+        raise  ReeborgError("select only one of two modes: 'eda' and 'sampling'")
     test = pd.read_csv('./data/preprocessed_test.csv')
     idx = test.id.values.astype(int)
     y = train.median_relevance.values
@@ -45,15 +55,22 @@ def main():
     X_test = hstack([tfv.transform(test_query), tfv.transform(test_title)])
 
     sim = similarlity_stack()
-    svd = TruncatedSVD(n_components=200)
-    scl = StandardScaler(with_mean=False)
-    svm =  SVC(C=10, gamma="auto", kernel="rbf", class_weight=None ,probability=True)
-    sampling = SVMSMOTE(svm_estimator=svm, k_neighbors=4)
-
-    clf = Pipeline([('FeatureUnion', FeatureUnion( [('svd', svd), ('sim', sim)] )),\
-                    ('scl', scl),\
-                    ('sampling', sampling),\
-                    ('svm', svm)])
+    if mode=='eda':
+        svd = TruncatedSVD(n_components=200)
+        scl = StandardScaler(with_mean=False)
+        svm =  SVC(C=10, gamma="auto", kernel="rbf", class_weight=None ,probability=True)
+        clf = Pipeline([('FeatureUnion', FeatureUnion( [('svd', svd), ('sim', sim)] )),\
+                            ('scl', scl),\
+                            ('svm', svm)])
+    elif mode=='sampling':
+        svd = TruncatedSVD(n_components=200)
+        scl = StandardScaler(with_mean=False)
+        svm =  SVC(C=10, gamma="auto", kernel="rbf", class_weight=None ,probability=True)
+        sampling = SVMSMOTE(svm_estimator=svm, k_neighbors=4)
+        clf = Pipeline([('FeatureUnion', FeatureUnion( [('svd', svd), ('sim', sim)] )),\
+                                  ('scl', scl),\
+                                  ('sampling', sampling),\
+                                  ('svm', svm)])      
 
     clf.fit(X_train, y)
     preds = clf.predict(X_test)
@@ -61,11 +78,41 @@ def main():
     
     submission = pd.DataFrame({"id": idx, "prediction": preds})
     submission_probas = pd.DataFrame(pred_probas, index=idx)
+    
+    return submission, submission_probas
+
+def Ensemble(*pred_probas):
+    submission = 0 
+    for pred_proba in pred_probas:
+        submission += pred_proba
+    submission /= len(pred_probas)
+
+    submission = submission.reset_index().rename(columns={"index": "id"})
+    
+    submission['prediction'] = submission[[0, 1, 2, 3]].idxmax(axis=1)+1
+    submission.drop([0, 1, 2, 3], axis=1, inplace=True)
+    
+    submission.to_csv("./submission/submission_ensemble123.csv", index=False)
+    
+if __name__=="__main__":
     if not os.path.exists("./submission"):
-        os.makedirs("./submission")
-    submission.to_csv("./submission/submission.csv", index=False)
-    submission_probas.to_csv("./submission/submission_proba_eda_over_150_10_7.csv")
+        os.makedirs("./submission") 
+    if args.ensemble:
+        _, submission_probas_eda = Predict(mode='eda')
+        _, submission_probas_sampling = Predict(mode='sampling')
+        Ensemble(submission_probas_eda, submission_probas_sampling)
+    else:
+        submission, submission_proba = Predict(mode=args.mode)
+        submission.to_csv("./submission/submission.csv", index=False)
+        submission_proba.to_csv("./submission/submission_proba_over_200_20_7_j.csv", index=False)
     
-if __name__=="__main__":    
-    
-    main()
+
+
+
+
+
+
+
+
+
+
