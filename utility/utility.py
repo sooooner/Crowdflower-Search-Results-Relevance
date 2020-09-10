@@ -160,9 +160,9 @@ class similarlity_stack(BaseEstimator, TransformerMixin):
         for row in X.tocsr():
             front, end = processer.split_array(row)
             cos_sims.append(metric.cos_sim(front, end))
-            # jaccard_sims.append(metric.jaccard_sim(front, end))
-        # return sparse.csr_matrix(np.matrix([x for x in zip(cos_sims, jaccard_sims)]))
-        return sparse.csr_matrix(np.matrix([x for x in cos_sims])).reshape(-1, 1)
+            jaccard_sims.append(metric.jaccard_sim(front, end))
+        return sparse.csr_matrix(np.matrix([x for x in zip(cos_sims, jaccard_sims)]))
+        # return sparse.csr_matrix(np.matrix([x for x in cos_sims])).reshape(-1, 1)
         
     def predict(self, X):
         if type(self.average) == type(None):
