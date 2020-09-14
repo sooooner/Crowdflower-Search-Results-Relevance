@@ -247,7 +247,7 @@ def plot_multiclass_roc_prc(clf, X, y, file_name=None):
     axes[0].set_title('roc curve')
     axes[0].legend(loc="lower right")
     
-    axes[1].plot(recall['micro'], precision['micro'], 'k--', label='area average = %0.2f' % average_precision["micro"])
+    axes[1].plot(recall['micro'], precision['micro'], 'k--', label='average precision(micro) = %0.2f' % average_precision["micro"])
     for i in range(1, 5):
         axes[1].plot(recall[i], precision[i], color=colors[i], label = 'rating %i area = %0.2f' % (i, average_precision[i]))
     axes[1].set_xlim([0.0, 1.0])
