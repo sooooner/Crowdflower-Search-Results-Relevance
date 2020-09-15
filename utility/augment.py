@@ -23,7 +23,7 @@ else:
     output = join(dirname(args.input), 'eda_' + basename(args.input))
 
 #number of augmented sentences to generate per original sentence
-num_aug = 9 #default
+num_aug = 0 #default
 if args.num_aug:
     num_aug = args.num_aug
 
