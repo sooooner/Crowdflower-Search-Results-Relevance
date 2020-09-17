@@ -33,6 +33,7 @@ def Predict(mode='eda'):
         train = pd.read_csv('./data/preprocessed_train.csv')
     else:
         raise  ReeborgError("select only one of two modes: 'eda' and 'sampling'")
+    train = train.drop_duplicates(['query_preprocessed', 'product_title_preprocessed'])
     test = pd.read_csv('./data/preprocessed_test.csv')
     idx = test.id.values.astype(int)
     y = train.median_relevance.values
@@ -104,7 +105,7 @@ if __name__=="__main__":
     else:
         submission, submission_proba = Predict(mode=args.mode)
         submission.to_csv("./submission/submission.csv", index=False)
-        submission_proba.to_csv("./submission/submission_proba_over_200_20_7_j.csv", index=False)
+        submission_proba.to_csv("./submission/submission_proba.csv", index=False)
     
 
 
