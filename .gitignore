@@ -1,6 +1,9 @@
 data/
 __pycache__/
 gridsearch/
+img/
+submission/
 .ipynb_checkpoints/
 *.pyc
 *.csv
+*.PNG
