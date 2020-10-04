@@ -48,10 +48,10 @@ python main.py --mode=eda --ensemble=True
 
 ## 참고자료 
 
-[Predicting the Relevance of Search Results for E-Commerce Systems](https://www.researchgate.net/publication/286219675_Predicting_the_Relevance_of_Search_Results_for_E-Commerce_Systems)  
-[Using TF-IDF to determine word relevance in document queries](https://www.researchgate.net/publication/228818851_Using_TF-IDF_to_determine_word_relevance_in_document_queries)  
-[Classifying Positive or Negative Text Using Features Based on Opinion Words and Term Frequency - Inverse Document Frequenc](https://ieeexplore.ieee.org/document/8541274)  
-[An introduction to latent semantic analysis](https://www.tandfonline.com/doi/abs/10.1080/01638539809545028)  
-[Using Linear Algebra for Intelligent Information Retrieval](https://epubs.siam.org/doi/abs/10.1137/1037127?journalCode=siread)  
-[EDA: Easy Data Augmentation Techniques for Boosting Performance on Text Classification Tasks](https://arxiv.org/abs/1901.11196)  
-[Weighted kappa loss function for multi-class classification of ordinal data in deep learning](https://www.sciencedirect.com/science/article/abs/pii/S0167865517301666)  
+1. [Predicting the Relevance of Search Results for E-Commerce Systems](https://www.researchgate.net/publication/286219675_Predicting_the_Relevance_of_Search_Results_for_E-Commerce_Systems)  
+2. [Using TF-IDF to determine word relevance in document queries](https://www.researchgate.net/publication/228818851_Using_TF-IDF_to_determine_word_relevance_in_document_queries)  
+3. [Classifying Positive or Negative Text Using Features Based on Opinion Words and Term Frequency - Inverse Document Frequenc](https://ieeexplore.ieee.org/document/8541274)  
+4. [An introduction to latent semantic analysis](https://www.tandfonline.com/doi/abs/10.1080/01638539809545028)  
+5. [Using Linear Algebra for Intelligent Information Retrieval](https://epubs.siam.org/doi/abs/10.1137/1037127?journalCode=siread)  
+6. [EDA: Easy Data Augmentation Techniques for Boosting Performance on Text Classification Tasks](https://arxiv.org/abs/1901.11196)  
+7. [Weighted kappa loss function for multi-class classification of ordinal data in deep learning](https://www.sciencedirect.com/science/article/abs/pii/S0167865517301666)  
