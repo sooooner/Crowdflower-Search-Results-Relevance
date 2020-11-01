@@ -10,6 +10,30 @@ Kaggle [Crowdflower Search Results Relevance data](https://www.kaggle.com/c/crow
   + [검색 서비스 만족도 판별모델(1)](https://medium.com/@tnsgh0101/crowdflower-search-results-relevance-with-lsa-2b05ac8b1a23)
   + [검색 서비스 만족도 판별모델(2)](https://medium.com/@tnsgh0101/%EA%B2%80%EC%83%89-%EC%84%9C%EB%B9%84%EC%8A%A4-%EB%A7%8C%EC%A1%B1%EB%8F%84-%ED%8C%90%EB%B3%84%EB%AA%A8%EB%8D%B8-2-9a8411baecab)
 
+## Project structure
+This project is organized as follows.
+
+```
+.
+└── utility/           
+    └── README.md 
+    └── __init__.py
+    └── augment.py                     # Data augmentation function
+    └── eda.py                         # EDA: Easy Data Augmentation Techniques for Boosting Performance on Text Classification Tasks
+    └── processing.py                  # Preprocessing functions
+    └── utility.py                     # metrics, distance stack, plot, etc. functions
+├── .gitignore                         
+├── Description.ipynb                  # description for this project
+├── EDA.ipynb                          # Exploratory Data Analysis
+├── LSA.ipynb                          # The whole process of the project
+├── README.md
+├── gridsearch.py                      # Parallelized gridsearchCV to find hyperparameters
+├── main.py                            # Make submission py
+├── preprocessing.ipynb                # Data preprocessing process flow
+├── README.md
+└── word2vec.ipynb                     # Implementing and applying word2vec(*Implemented in tensorflow 1 version.)
+```
+  
 ## Exploratory Data Analysis
 데이터 탐색
 + EDA.ipynb
