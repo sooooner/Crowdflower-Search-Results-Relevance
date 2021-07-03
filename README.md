@@ -16,22 +16,23 @@ This project is organized as follows.
 ```
 .
 └── utility/           
-    └── README.md 
-    └── __init__.py
-    └── augment.py                     # Data augmentation function
-    └── eda.py                         # EDA: Easy Data Augmentation Techniques for Boosting Performance on Text Classification Tasks
-    └── processing.py                  # Preprocessing functions
+    ├── README.md 
+    ├── __init__.py
+    ├── augment.py                     # Data augmentation function
+    ├── eda.py                         # EDA: Easy Data Augmentation Techniques for Boosting Performance on Text Classification Tasks
+    ├── processing.py                  # Preprocessing functions
     └── utility.py                     # metrics, distance stack, plot, etc. functions
-├── .gitignore                         
-├── Description.ipynb                  # description for this project
-├── EDA.ipynb                          # Exploratory Data Analysis
-├── LSA.ipynb                          # The whole process of the project
+└── example/      
+    ├── Description.ipynb              # description for this project
+    ├── EDA.ipynb                      # Exploratory Data Analysis
+    ├── LSA.ipynb                      # The whole process of the project
+    ├── preprocessing.ipynb            # Data preprocessing process flow
+    └── word2vec.ipynb                 # Implementing and applying word2vec(*Implemented in tensorflow 1 version.)
+├── .gitignore       
 ├── README.md
 ├── gridsearch.py                      # Parallelized gridsearchCV to find hyperparameters
-├── main.py                            # Make submission py
-├── preprocessing.ipynb                # Data preprocessing process flow
-├── README.md
-└── word2vec.ipynb                     # Implementing and applying word2vec(*Implemented in tensorflow 1 version.)
+└── main.py                            # Make submission py
+
 ```
   
 ## Exploratory Data Analysis
