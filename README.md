@@ -21,6 +21,7 @@ This project is organized as follows.
     ├── augment.py                     # Data augmentation function
     ├── eda.py                         # EDA: Easy Data Augmentation Techniques for Boosting Performance on Text Classification Tasks
     ├── processing.py                  # Preprocessing functions
+    ├── predict.py                     # predict functions
     └── utility.py                     # metrics, distance stack, plot, etc. functions
 └── example/      
     ├── Description.ipynb              # description for this project
@@ -65,10 +66,10 @@ processing.py 로 데이터 전처리후 data Augmentation을 합니다.(data Au
 python utility/processing.py --input=./data/train.csv --eda=True
 python utility/augment.py --input=./data/eda/train_1.txt --num_aug=8 --alpha=0.05
 python utility/augment.py --input=./data/eda/train_2.txt --num_aug=4 --alpha=0.05
-python utility/augment.py --input=./data/eda/train_3.txt --num_aug=4 --alpha=0.05"
+python utility/augment.py --input=./data/eda/train_3.txt --num_aug=4 --alpha=0.05
 python utility/augment.py --input=./data/eda/train_4.txt --num_aug=0
 python utility/processing.py --input=./data/eda_train.csv
-python main.py --mode=eda --ensemble=True
+python main.py --mode=eda 
 ```
 
 ## 참고자료 
