@@ -22,10 +22,16 @@ from sklearn.feature_extraction import text
 
 from imblearn.pipeline import Pipeline
 from imblearn.over_sampling import SVMSMOTE
+from utility.utility import metric, similarlity_stack, tf_weight_stack
 
-from utility.utility import metric, similarlity_stack, plot_multiclass_roc_prc, tf_weight_stack
-from utility.processing import processer
-
+def load_data():
+    # train = pd.read_csv('./data/preprocessed_train.csv')
+    train = pd.read_csv('./data/preprocessed_eda_train.csv')
+    train.set_index('id', inplace=True)
+    
+    target = train['median_relevance']
+    train = train[['query_preprocessed', 'product_title_preprocessed']]
+    return train, target
 
 
 class gridsearchCV(object):
@@ -167,17 +173,15 @@ class gridsearchCV(object):
                     fw.write(line)
                 os.remove(join(dirname(self.filename), 'result_%d_%s_temp.txt'%(k+1, str(self.sample))))
 
+
+
 if __name__=="__main__":
-    train = pd.read_csv('./data/preprocessed_eda_train.csv')
-    train.set_index('id', inplace=True)
-    
-    target = train['median_relevance']
-    train = train[['query_preprocessed', 'product_title_preprocessed']]
-    
     # n_components, C, gamma, class_weight, kernel, min_df
     params = [[100, 200, 300], [1, 10], ['auto'], [None], ['rbf'], [3, 7]]
-    # params = [[100, 150], [1, 10], ['auto'], [None], ['rbf'], [3, 7]]
+    # params = [[150], [1, 10], ['auto'], [None], ['rbf'], [7]]
     
+    train, target = load_data()
+
     n_jobs = 6
     filename = './gridsearch/result.txt'
     for sample in [False, True]:
